@@ -91,6 +91,20 @@ def extract_next_data(html: str) -> dict:
         return {}
 
 
+def extract_pagination(html: str) -> dict:
+    # 2026-10-14: strona wyników mówi, którą stronę faktycznie zwróciła i ile ich jest.
+    # Prośba o stronę za ostatnią (np. ?page=6 przy 5 stronach) NIE daje pustej strony:
+    # Otodom gubi wtedy wszystkie filtry (prywatni, ostatnia doba) i zwraca ostatnią stronę
+    # całej bazy — ok. 36 ogłoszeń biur i deweloperów na każdy przebieg każdego wyszukiwania.
+    data = extract_next_data(html)
+    return dig(data, "props", "pageProps", "data", "searchAds", "pagination") or {}
+
+
+# Typy ogłoszeniodawcy, którym nie wysyłamy SMS-ów. Celowo lista zakazanych, a nie „tylko PRIVATE”:
+# ogłoszenie bez oznaczenia typu (zdarza się 1–4 razy w miesiącu) przechodzi jak dotąd.
+NOT_PRIVATE_OWNER_TYPES = {"AGENCY", "DEVELOPER_UNIT", "DEVELOPER"}
+
+
 def dig(d, *keys, default=None):
     cur = d
     for k in keys:
@@ -180,7 +194,7 @@ def parse_offer(url: str, property_type: str, transaction_type: str) -> Optional
 
 def scrape_job(job: dict) -> dict:
     run_id = sb.rpc("leads_start_run", {"p_job_id": job["id"]}).execute().data
-    stats = {"pages": 0, "listings_found": 0, "listings_new": 0, "phones_new": 0}
+    stats = {"pages": 0, "listings_found": 0, "listings_new": 0, "phones_new": 0, "skipped_not_private": 0}
     try:
         base_url = job["search_url"]
         page = 1
@@ -190,6 +204,16 @@ def scrape_job(job: dict) -> dict:
             log.info(f"[{job['name']}] page {page}: {page_url}")
             html = fetch(page_url)
             if not html:
+                break
+
+            pagination = extract_pagination(html)
+            total_pages = pagination.get("totalPages")
+            current_page = pagination.get("currentPage")
+            if current_page is not None and current_page != page:
+                log.info(f"[{job['name']}] Otodom zwrócił stronę {current_page} zamiast {page} (koniec wyników) — stop")
+                break
+            if total_pages is not None and page > total_pages:
+                log.info(f"[{job['name']}] strona {page} > ostatnia ({total_pages}) — stop")
                 break
 
             urls = extract_listing_urls(html) - seen_urls
@@ -204,6 +228,10 @@ def scrape_job(job: dict) -> dict:
                 offer = parse_offer(url, job["property_type"], job["transaction_type"])
                 jitter_sleep()
                 if not offer:
+                    continue
+                if offer.get("owner_type") in NOT_PRIVATE_OWNER_TYPES:
+                    stats["skipped_not_private"] += 1
+                    log.info(f"[{job['name']}] {url} pominięte: {offer['owner_type']}")
                     continue
                 try:
                     res = sb.rpc("leads_ingest_offer", {"p_offer": offer}).execute()
