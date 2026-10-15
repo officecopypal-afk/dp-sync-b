@@ -112,15 +112,21 @@ BLOCKED_OWNER_IDS = {"11218569"}
 BLOCKED_OWNER_NAME_PARTS = ("richter",)
 
 
-def is_blocked_owner(ad: dict) -> bool:
+def blocked_owner_match(ad: dict) -> Optional[dict]:
+    """None albo {"match": "konto"|"nazwisko", "owner_id": ...} — samo nazwisko nie wychodzi z funkcji."""
     for key in ("owner", "contactDetails"):
         person = ad.get(key) or {}
-        if str(person.get("id")) in BLOCKED_OWNER_IDS:
-            return True
+        owner_id = str(person.get("id")) if person.get("id") is not None else None
+        if owner_id in BLOCKED_OWNER_IDS:
+            return {"match": "konto", "owner_id": owner_id}
         name = (person.get("name") or "").lower()
         if any(part in name for part in BLOCKED_OWNER_NAME_PARTS):
-            return True
-    return False
+            return {"match": "nazwisko", "owner_id": owner_id}
+    return None
+
+
+def is_blocked_owner(ad: dict) -> bool:
+    return blocked_owner_match(ad) is not None
 
 
 def dig(d, *keys, default=None):
@@ -202,7 +208,7 @@ def parse_offer(url: str, property_type: str, transaction_type: str) -> Optional
         "voivodeship": dig(ad, "location", "address", "province", "name"),
         "owner_type": dig(ad, "advertType"),
         # zdejmowane w scrape_job przed wysłaniem do bazy
-        "blocked_owner": is_blocked_owner(ad),
+        "blocked_owner": blocked_owner_match(ad),
         "posted_at": dig(ad, "createdAt") or dig(ad, "dateCreated"),
         "raw": {
             "ad_id": dig(ad, "id"),
@@ -250,9 +256,23 @@ def scrape_job(job: dict) -> dict:
                 jitter_sleep()
                 if not offer:
                     continue
-                if offer.pop("blocked_owner", False):
+                blocked = offer.pop("blocked_owner", None)
+                if blocked:
                     stats["skipped_blocked_owner"] += 1
-                    log.info(f"[{job['name']}] {url} pominięte: zablokowany ogłoszeniodawca")
+                    log.info(f"[{job['name']}] {url} pominięte: zablokowany ogłoszeniodawca ({blocked['match']})")
+                    # ślad dla strażnika (zadanie co 2 h); błąd zapisu nie może puścić ogłoszenia dalej
+                    try:
+                        sb.rpc("leads_log_blocked_owner_hit", {"p_hit": {
+                            "portal": "otodom",
+                            "portal_listing_id": offer.get("portal_listing_id") or url,
+                            "url": url,
+                            "owner_id": blocked["owner_id"],
+                            "match": blocked["match"],
+                            "phone": offer.get("phone"),
+                            "job_name": job["name"],
+                        }}).execute()
+                    except Exception as e:
+                        log.error(f"Blocked-owner log error {url}: {e}")
                     continue
                 if offer.get("owner_type") in NOT_PRIVATE_OWNER_TYPES:
                     stats["skipped_not_private"] += 1
