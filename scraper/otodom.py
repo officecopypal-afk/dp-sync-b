@@ -104,6 +104,24 @@ def extract_pagination(html: str) -> dict:
 # ogłoszenie bez oznaczenia typu (zdarza się 1–4 razy w miesiącu) przechodzi jak dotąd.
 NOT_PRIVATE_OWNER_TYPES = {"AGENCY", "DEVELOPER_UNIT", "DEVELOPER"}
 
+# 2026-10-15: ogłoszeniodawcy, których nie zbieramy wcale — także gdy wystawią ogłoszenie z nowym
+# numerem, bo czarna lista działa tylko po numerze. Skarga z 13.10.2026 (ogłoszenie 68492827).
+# Sprawdzamy konto i nazwisko w owner i contactDetails; nazwisko porównywane w locie,
+# nie trafia ani do bazy, ani do logów.
+BLOCKED_OWNER_IDS = {"11218569"}
+BLOCKED_OWNER_NAME_PARTS = ("richter",)
+
+
+def is_blocked_owner(ad: dict) -> bool:
+    for key in ("owner", "contactDetails"):
+        person = ad.get(key) or {}
+        if str(person.get("id")) in BLOCKED_OWNER_IDS:
+            return True
+        name = (person.get("name") or "").lower()
+        if any(part in name for part in BLOCKED_OWNER_NAME_PARTS):
+            return True
+    return False
+
 
 def dig(d, *keys, default=None):
     cur = d
@@ -183,6 +201,8 @@ def parse_offer(url: str, property_type: str, transaction_type: str) -> Optional
         "district": dig(ad, "location", "address", "district", "name"),
         "voivodeship": dig(ad, "location", "address", "province", "name"),
         "owner_type": dig(ad, "advertType"),
+        # zdejmowane w scrape_job przed wysłaniem do bazy
+        "blocked_owner": is_blocked_owner(ad),
         "posted_at": dig(ad, "createdAt") or dig(ad, "dateCreated"),
         "raw": {
             "ad_id": dig(ad, "id"),
@@ -194,7 +214,8 @@ def parse_offer(url: str, property_type: str, transaction_type: str) -> Optional
 
 def scrape_job(job: dict) -> dict:
     run_id = sb.rpc("leads_start_run", {"p_job_id": job["id"]}).execute().data
-    stats = {"pages": 0, "listings_found": 0, "listings_new": 0, "phones_new": 0, "skipped_not_private": 0}
+    stats = {"pages": 0, "listings_found": 0, "listings_new": 0, "phones_new": 0, "skipped_not_private": 0,
+             "skipped_blocked_owner": 0}
     try:
         base_url = job["search_url"]
         page = 1
@@ -228,6 +249,10 @@ def scrape_job(job: dict) -> dict:
                 offer = parse_offer(url, job["property_type"], job["transaction_type"])
                 jitter_sleep()
                 if not offer:
+                    continue
+                if offer.pop("blocked_owner", False):
+                    stats["skipped_blocked_owner"] += 1
+                    log.info(f"[{job['name']}] {url} pominięte: zablokowany ogłoszeniodawca")
                     continue
                 if offer.get("owner_type") in NOT_PRIVATE_OWNER_TYPES:
                     stats["skipped_not_private"] += 1
