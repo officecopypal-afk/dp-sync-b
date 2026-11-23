@@ -1,5 +1,7 @@
 name: test alert (ręczny)
 on: { workflow_dispatch: {} }
+permissions:
+  contents: read
 jobs:
   t:
     runs-on: ubuntu-latest
