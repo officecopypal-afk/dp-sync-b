@@ -27,4 +27,8 @@ jobs:
           IPROYAL_PROXY: ${{ secrets.IPROYAL_PROXY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: node assign_ip.mjs ${{ github.event.inputs.accounts }}
+          ACCOUNTS: ${{ github.event.inputs.accounts }}
+        run: |
+          if ! printf '%s' "$ACCOUNTS" | grep -Eq '^[A-Za-z0-9_, -]*$'; then echo "niedozwolone znaki w accounts"; exit 1; fi
+          # po walidacji bez cudzysłowu, żeby podzielić na argumenty
+          node assign_ip.mjs $ACCOUNTS

@@ -55,6 +55,7 @@ jobs:
         if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref_name }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
@@ -62,7 +63,7 @@ jobs:
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "content-type: application/json" -d '{}')
           if [ "$EN" = "true" ]; then
-            gh workflow run "OLX MOBILE reveal" --ref "${{ github.ref_name }}"
+            gh workflow run "OLX MOBILE reveal" --ref "$REF"
           else
             echo "reveal WYŁĄCZONY (flaga) — nie łańcuchuję"
           fi

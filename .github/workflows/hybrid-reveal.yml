@@ -51,4 +51,5 @@ jobs:
         if: ${{ success() && github.event.inputs.only_accounts == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run "OLX HYBRID reveal" --ref "${{ github.ref_name }}"
+          REF: ${{ github.ref_name }}
+        run: gh workflow run "OLX HYBRID reveal" --ref "$REF"

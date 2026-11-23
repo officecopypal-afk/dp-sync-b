@@ -55,4 +55,5 @@ jobs:
         if: ${{ success() && github.event.inputs.only_accounts == '' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run "OLX browser reveal (Track 2)" --ref "${{ github.ref_name }}"
+          REF: ${{ github.ref_name }}
+        run: gh workflow run "OLX browser reveal (Track 2)" --ref "$REF"

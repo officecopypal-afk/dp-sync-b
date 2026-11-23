@@ -36,4 +36,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APPLY: ${{ github.event.inputs.apply == 'true' && '1' || '0' }}
           NO_PROXY: ${{ github.event.inputs.no_proxy == 'true' && '1' || '0' }}
-        run: node pilot_reip.mjs ${{ github.event.inputs.accounts }}
+          ACCOUNTS: ${{ github.event.inputs.accounts }}
+        run: |
+          if ! printf '%s' "$ACCOUNTS" | grep -Eq '^[A-Za-z0-9_, -]*$'; then echo "niedozwolone znaki w accounts"; exit 1; fi
+          # po walidacji bez cudzysłowu, żeby podzielić na argumenty
+          node pilot_reip.mjs $ACCOUNTS
