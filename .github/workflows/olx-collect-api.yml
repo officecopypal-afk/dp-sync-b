@@ -17,6 +17,9 @@ concurrency:
   group: olx-collect-api
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   collect:
     runs-on: ubuntu-latest
@@ -25,11 +28,13 @@ jobs:
       run:
         working-directory: scraper/olx-collect
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: collect (API)
         env:
           IPROYAL_PROXY: ${{ secrets.IPROYAL_PROXY }}

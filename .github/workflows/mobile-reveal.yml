@@ -15,7 +15,6 @@ on:
         description: "Budżet minut runu (potem self-chain)"
         default: "330"
 permissions:
-  actions: write   # do samo-wywołania następnego runu (łańcuch)
   contents: read
 
 # TWARDA BRAMKA: tylko 1 run tego workflowa naraz + max 1 w kolejce.
@@ -26,17 +25,22 @@ concurrency:
   cancel-in-progress: false
 jobs:
   reveal:
+    permissions:
+      actions: write   # do samo-wywołania następnego runu (łańcuch)
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 350
     defaults:
       run:
         working-directory: scraper/olx-mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - run: npm install undici --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: mobile reveal engine
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -53,6 +57,7 @@ jobs:
         if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref_name }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
@@ -60,7 +65,7 @@ jobs:
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "content-type: application/json" -d '{}')
           if [ "$EN" = "true" ]; then
-            gh workflow run "OLX MOBILE reveal" --ref "${{ github.ref_name }}"
+            gh workflow run "OLX MOBILE reveal" --ref "$REF"
           else
             echo "reveal WYŁĄCZONY (flaga) — nie łańcuchuję"
           fi

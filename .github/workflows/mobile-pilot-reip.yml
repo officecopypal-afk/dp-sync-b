@@ -14,6 +14,8 @@ on:
       no_proxy:
         description: "Jechać BEZ proxy, z IP runnera? (true/false)"
         default: "false"
+permissions:
+  contents: read
 jobs:
   pilot:
     runs-on: ubuntu-latest
@@ -22,11 +24,13 @@ jobs:
       run:
         working-directory: scraper/olx-mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - run: npm install undici --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
       - name: pilot re-IP
         env:
           IPROYAL_PROXY: ${{ secrets.IPROYAL_PROXY }}
@@ -34,4 +38,8 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APPLY: ${{ github.event.inputs.apply == 'true' && '1' || '0' }}
           NO_PROXY: ${{ github.event.inputs.no_proxy == 'true' && '1' || '0' }}
-        run: node pilot_reip.mjs ${{ github.event.inputs.accounts }}
+          ACCOUNTS: ${{ github.event.inputs.accounts }}
+        run: |
+          if ! printf '%s' "$ACCOUNTS" | grep -Eq '^[A-Za-z0-9_, -]*$'; then echo "niedozwolone znaki w accounts"; exit 1; fi
+          # po walidacji bez cudzysłowu, żeby podzielić na argumenty
+          node pilot_reip.mjs $ACCOUNTS

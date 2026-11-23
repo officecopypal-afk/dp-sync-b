@@ -5,6 +5,6 @@
   "type": "module",
   "description": "Worker OLX (Node + patchright). Faza 1 kolektor + Faza 2 reveal. Supabase przez fetch (RPC).",
   "dependencies": {
-    "patchright": "latest"
+    "patchright": "1.64.3"
   }
 }
